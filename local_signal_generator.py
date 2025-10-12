@@ -57,7 +57,7 @@ async def _read_snapshot(session: aiohttp.ClientSession, url: str) -> Any:
             return None
         try:
             return await resp.json()
-        except Exception as e:
+        except Exception:
             text = await resp.text()
             s = text.lstrip("\ufeff").strip()
             start = min([i for i in [s.find("{"), s.find("[")] if i != -1] or [-1])
