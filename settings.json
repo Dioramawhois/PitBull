@@ -29,5 +29,8 @@
     "pnl_threshold_percent": 3.0,
     "add_margin_amount": 5,
     "max_entries": 2
-  }
+  },
+
+  "OPEN_BROWSER_ON_SIGNAL": true,
+  "OPEN_POSITION_ON_SIGNAL": false
 }

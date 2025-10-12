@@ -71,9 +71,11 @@ async def _read_snapshot(session: aiohttp.ClientSession, url: str) -> Any:
                 return None
 
 
-async def start_polling(orders_queue: "asyncio.Queue[Dict[str, Any]]",
-                        tokens_info: Dict[str, Dict[str, Any]]) -> None:
-    logger.info("Локальный генератор сигналов запущен. Цель: %s", DATA_PROVIDER_URL)
+async def start_polling(
+    orders_queue: "asyncio.Queue[Dict[str, Any]]",
+    tokens_info: Dict[str, Dict[str, Any]],
+) -> None:
+    logger.info(f"Локальный генератор сигналов запущен. Цель: {DATA_PROVIDER_URL}")
 
     timeout = aiohttp.ClientTimeout(total=15)
     backoff = 1.0
@@ -132,8 +134,7 @@ async def start_polling(orders_queue: "asyncio.Queue[Dict[str, Any]]",
                         "gmgn_url": "https://www.dextools.io/",
                     }
                     await orders_queue.put(order)
-                    logger.info("Сигнал %s: спред %.3f%% (MEXC_mid=%s, DEX=%s)",
-                                pair_key, spread, mexc_mid_price, dex_price)
+                    logger.info(f"Сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})")
 
                 await asyncio.sleep(POLL_PERIOD_SEC)
 

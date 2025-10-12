@@ -6,19 +6,14 @@ from loguru import logger
 from services.browser import EngineBrowser
 
 
-def build_mexc_url(symbol: str, quote: str = "USDT") -> str:
-    # Формат MEXC: https://www.mexc.com/exchange/ACH_USDT
-    base = symbol.strip().upper()
-    q = (quote or "USDT").strip().upper()
-    return f"https://www.mexc.com/exchange/{base}_{q}"
+def build_mexc_url(pair: str) -> str:
+    return f"https://www.mexc.com/exchange/{pair}"
 
 
 def build_dex_url(chain: str, pair_address: str) -> str:
-    # Дёшево и сердито: dexscreener по адресу пары
-    # https://dexscreener.com/bsc/0x28bdb16b623176426305a70d8b475be73aca71f3
     ch = chain.strip().lower()
     addr = pair_address.strip()
-    return f"https://dexscreener.com/{ch}/{addr}"
+    return f"https://dextools.com/{ch}/{addr}"
 
 
 def collect_order_urls(order_info: dict) -> dict:
@@ -29,7 +24,7 @@ def collect_order_urls(order_info: dict) -> dict:
 
     urls = {}
     if mexc_symbol:
-        urls["mexc_url"] = build_mexc_url(mexc_symbol, quote_symbol)
+        urls["mexc_url"] = build_mexc_url(mexc_symbol)
     if dex_chain and pair_address:
         urls["gmgn_url"] = build_dex_url(dex_chain, pair_address)  # положим в gmgn_url, т.к. класс так ожидает
     return urls

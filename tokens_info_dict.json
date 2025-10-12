@@ -2178,10 +2178,10 @@
     "ACH_USDT": {
         "mexc_symbol": "ACH_USDT",
         "base_coin_name": "ACH",
-        "custom_percent": null,
+        "custom_percent": 0.0,
         "is_ignored": true,
-        "is_normik": false,
-        "max_margin": null
+        "is_normik": true,
+        "max_margin": 0
     },
     "FOOTBALL_USDT": {
         "mexc_symbol": "FOOTBALL_USDT",

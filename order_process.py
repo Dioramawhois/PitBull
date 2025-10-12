@@ -18,7 +18,7 @@ from mexc_futures_calls import (
     mexc_call,
 )
 from services.utils.open_link import open_pair_links
-from settings.order import open_browser_on_signal, open_position_on_signal
+from settings.auth import mexc_tokens
 from token_services import read_file_async
 
 
@@ -40,7 +40,13 @@ def notify_beep():
         pass
 
 
-async def handle_order_create(payload: dict, order_info: dict, mexc_auth: str):
+async def handle_order_create(
+    payload: dict,
+    order_info: dict,
+    mexc_auth: str,
+    open_position_on_signal: bool = False,
+    open_browser_on_signal: bool = True,
+):
     try:
         if not payload:
             logger.error("Создание ордера отменено: пустой payload для %s", order_info.get("mexc_symbol"))
@@ -63,7 +69,6 @@ async def prepare_payload(limit_price, side, order, leverage, max_margin, token)
         logger.error(f"[{order['mexc_symbol']}] Некорректная цена: {limit_price}. Пропускаем.")
         return None
 
-    # НЕ позволяем токеновому лимиту превышать глобальный
     token_margin = token.get('max_margin')
     if isinstance(token_margin, (int, float)) and token_margin > 0:
         margin = min(max_margin, token_margin)
@@ -124,12 +129,11 @@ async def fetch_position_id_for_symbol(auth_token: str, symbol: str, want_side_o
     return None
 
 
-async def handle_order(token, order, redis_client, settings):
+async def handle_order(token, order, redis_client, settings: dict, mexc_auth: str):
     token['order_in_process'] = True
     symbol = token['mexc_symbol']
     logger.info(f"Начало обработки ордера для {symbol}...")
     try:
-        mexc_auth = settings.get('MEXC_AUTH_TOKEN')
         max_margin = settings.get('max_margin')
         target_leverage = int(settings.get('leverage', 20))
         if not all([mexc_auth, max_margin, target_leverage]):
@@ -146,10 +150,12 @@ async def handle_order(token, order, redis_client, settings):
             long_res  = await change_leverage(symbol, actual_leverage_to_set, mexc_auth, position_type=1)
             short_res = await change_leverage(symbol, actual_leverage_to_set, mexc_auth, position_type=2)
 
-            ok       = lambda r: bool(r and r.get('success'))
-            is_2019  = lambda r: bool(r and r.get('code') == 2019)
-            is_600   = lambda r: bool(r and r.get('code') == 600)
-
+            def ok(r: dict):
+                return bool(r and r.get("success"))
+            def is_2019(r: dict):
+                return bool(r and r.get("code") == 2019)
+            def is_600(r: dict):
+                return bool(r and r.get("code") == 600)
             if ok(long_res) and ok(short_res):
                 leverage_res = long_res
             else:
@@ -167,7 +173,6 @@ async def handle_order(token, order, redis_client, settings):
                 if ok(long_res) and ok(short_res):
                     leverage_res = long_res
                 else:
-                    # Фоллбэк: если обе стороны дали 600 (не тот режим) — пробуем One-way
                     if is_600(long_res) and is_600(short_res):
                         logger.warning(f"[{symbol}] Оба change_leverage вернули 600 в Hedge. Пробую One-way.")
                         oneway_res = await change_leverage(symbol, actual_leverage_to_set, mexc_auth)
@@ -198,9 +203,14 @@ async def handle_order(token, order, redis_client, settings):
             payload['type'] = 5
             payload.pop('price', None)
 
-        main_order_res = await handle_order_create(payload, order, mexc_auth)
+        main_order_res = await handle_order_create(
+            payload=payload,
+            order_info=order,
+            mexc_auth=mexc_auth,
+            open_position_on_signal=settings.get("OPEN_POSITION_ON_SIGNAL", False),
+            open_browser_on_signal=settings.get("OPEN_BROWSER_ON_SIGNAL", True),
+        )
 
-        # Автоматически проверяем успех, ждём positionId (по orderId/open_positions) и ставим SL/TP reduceOnly
         pos_id = await finalize_order_and_setup_sl_tp(
             main_order_res,
             symbol=symbol,
@@ -213,7 +223,6 @@ async def handle_order(token, order, redis_client, settings):
             redis_client=redis_client
         )
 
-        # --- Служебное: спред для мониторинга, кулдаун, бип ---
         if pos_id:
             await redis_client.set(f"initial_spread:{pos_id}", order.get('percent'))
         if settings.get("USE_COOLDOWN", True):
@@ -366,7 +375,8 @@ async def start_process(_tokens_info, _task_status, orders_queue):
             if token.get("order_in_process"):
                 logger.warning(f"Ордер для {mexc_symbol} уже в обработке. Сигнал пропущен.")
                 continue
-            await handle_order(token, order, redis_client, settings)
+            for mexc_auth in mexc_tokens:
+                await handle_order(token, order, redis_client, settings, mexc_auth)
 
         except asyncio.CancelledError:
             logger.warning("Задача обработки ордеров была отменена.")
