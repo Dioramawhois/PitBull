@@ -18,7 +18,7 @@ from mexc_futures_calls import (
     mexc_call,
 )
 from services.utils.open_link import open_pair_links
-from settings.order import open_position_on_signal
+from settings.order import open_browser_on_signal, open_position_on_signal
 from token_services import read_file_async
 
 
@@ -50,7 +50,8 @@ async def handle_order_create(payload: dict, order_info: dict, mexc_auth: str):
             if result and result.get('success') and result.get('code') == 0:
                 logger.info("Ордер создан - %s, результат: %s", order_info.get('mexc_symbol'), result)
                 return result
-        await open_pair_links(order_info)
+        if open_browser_on_signal:
+            await open_pair_links(order_info)
     except Exception as exc:
         logger.warning(f"Произошла ошибка при обработке ордера: {exc}")
     logger.error("Ошибка создания ордера для %s: %s", order_info.get('mexc_symbol'), result)
