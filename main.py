@@ -20,6 +20,7 @@ async def main():
     contracts_data = await token_services.get_all_mexc_contracts_info()
     if not contracts_data:
         logger.error("Не удалось загрузить данные о контрактах с MEXC. Проверьте интернет-соединение.")
+        raise SystemExit("Завершение работы из-за ошибки загрузки данных.")
     else:
         logger.info(f"С MEXC загружена информация о {len(contracts_data)} контрактах.")
     tokens_info = await token_services.read_file_async('tokens_info_dict.json') or {}
@@ -50,7 +51,7 @@ async def main():
     try:
         logger.info("Попытка обновить список токенов с удаленного сервера (может не работать локально)...")
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-            async with session.get('http://193.124.114.27:3000/all_tokens_info') as response:
+            async with session.get('http://193.124.114.27:3000/all_tokens_info'):
                 pass
     except Exception as e:
         logger.warning(f"Не удалось обновить токены с удаленного сервера (это нормально для локального режима): {e}")
