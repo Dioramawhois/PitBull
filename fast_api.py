@@ -1,16 +1,16 @@
 import asyncio
 import logging
-from typing import List, Dict, Any
-import uvicorn
-from token_services import strict_token_field, save_file_async, read_file_async
-from fastapi import FastAPI, HTTPException
-
-from fastapi.middleware.cors import CORSMiddleware
 import os
+from typing import Any, Dict, List, Optional
+
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
 from redis.asyncio import from_url
+
 from redis_repo import TokensRepo
+from token_services import read_file_async, save_file_async, strict_token_field
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -184,9 +184,9 @@ async def clear_in_process():
     for tokens in tokens_info.values():
         if tokens.get('order_in_process', False):
             tokens['order_in_process'] = False
-
-    logger.info(f"Cleared in process")
-    return {'msg': f"Cleared in process"}
+    msg = "Cleared in process"
+    logger.info(msg)
+    return {'msg': msg}
 
 
 @app.post("/ignore_token/{symbol}", tags=["Tokens Interaction"])
