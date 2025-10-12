@@ -1,9 +1,12 @@
 import asyncio
 import os
 import platform
+import shutil
+import subprocess
 import sys
 import time
 from math import floor
+from pathlib import Path
 
 from loguru import logger
 from redis.asyncio import from_url
@@ -22,6 +25,9 @@ from settings.auth import mexc_tokens
 from token_services import read_file_async
 
 
+SOUND_FILE = Path(__file__).resolve().parent / "sounds" / "alert.mp3"
+
+
 def adjust_price_to_tick_size(price: float, price_scale: int) -> float:
     if price_scale is None:
         return price
@@ -31,13 +37,34 @@ def adjust_price_to_tick_size(price: float, price_scale: int) -> float:
 
     return round(adjusted_price, price_scale)
 
-def notify_beep():
+def notify_beep() -> None:
+    if SOUND_FILE.exists():
+        system = platform.system()
+        try:
+            if system == "Windows":
+                import winsound  # type: ignore
+                winsound.PlaySound(str(SOUND_FILE), winsound.SND_FILENAME | winsound.SND_ASYNC)
+                return
+            if system == "Darwin" and shutil.which("afplay"):
+                subprocess.Popen(
+                    ["afplay", str(SOUND_FILE)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return
+            for player in ("paplay", "aplay", "play", "mpg123"):
+                cmd_path = shutil.which(player)
+                if cmd_path:
+                    subprocess.Popen(
+                        [cmd_path, str(SOUND_FILE)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    return
+        except Exception as exc:
+            logger.debug("Не удалось проиграть файл %s: %s", SOUND_FILE, exc)
     sys.stdout.write("\a")
     sys.stdout.flush()
-    try:
-        if platform.system() == "Windows": import winsound; winsound.Beep(1000, 300)
-    except Exception:
-        pass
 
 
 async def handle_order_create(
@@ -51,6 +78,7 @@ async def handle_order_create(
         if not payload:
             logger.error("Создание ордера отменено: пустой payload для %s", order_info.get("mexc_symbol"))
             return None
+        notify_beep()
         if open_position_on_signal:
             result = await mexc_call(url_mode='create_order', data=payload, auth_token=mexc_auth)
             if result and result.get('success') and result.get('code') == 0:

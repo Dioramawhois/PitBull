@@ -9,22 +9,22 @@ def build_mexc_url(pair: str) -> str:
     return f"https://www.mexc.com/futures/{pair}"
 
 
-def build_dex_url(chain: str, pair_address: str) -> str:
-    ch = chain.strip().lower()
-    addr = pair_address.strip()
-    return f"https://dextools.com/{ch}/{addr}"
-
+def build_dex_url(order_info: dict) -> str:
+    dextools_pairs: list[dict[str, str]] = order_info.get("dextools_pairs", [])
+    pair: dict[str, str] = dextools_pairs[0] if dextools_pairs else {}
+    if not pair:
+        return ""
+    link = pair.get("explorer_link", "")
+    if isinstance(link, str) and link.startswith("http"):
+        return link
+    return ""
 
 def collect_order_urls(order_info: dict) -> dict:
     mexc_symbol = (order_info.get("mexc_symbol") or "").strip()
-    dex_chain = (order_info.get("dex_chain") or "").strip()
-    pair_address = (order_info.get("pair_address") or "").strip()
-
     urls = {}
     if mexc_symbol:
         urls["mexc_url"] = build_mexc_url(mexc_symbol)
-    if dex_chain and pair_address:
-        urls["gmgn_url"] = build_dex_url(dex_chain, pair_address)
+    urls["gmgn_url"] = build_dex_url(order_info)
     return urls
 
 

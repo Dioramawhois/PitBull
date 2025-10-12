@@ -32,5 +32,5 @@
   },
 
   "OPEN_BROWSER_ON_SIGNAL": true,
-  "OPEN_POSITION_ON_SIGNAL": true
+  "OPEN_POSITION_ON_SIGNAL": false
 }
