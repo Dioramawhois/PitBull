@@ -55,7 +55,7 @@ class EngineBrowser:
     async def __aexit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
         await self.close()
 
-    async def open_order(self, order: Order, *, gmgn_is_needed: bool = True) -> None:
+    async def open_order(self, order: Order | dict, *, gmgn_is_needed: bool = True) -> None:
         urls = self._collect_urls(order, gmgn_is_needed=gmgn_is_needed)
         if not urls:
             raise ValueError("В order нет валидных URL. Нужны mexc_url и/или gmgn_url.")
@@ -75,7 +75,7 @@ class EngineBrowser:
         # Метод оставлен для совместимости с предыдущей реализацией.
         return None
 
-    def _collect_urls(self, order: Order, *, gmgn_is_needed: bool) -> list[str]:
+    def _collect_urls(self, order: Order | dict, *, gmgn_is_needed: bool) -> list[str]:
         urls: list[str] = []
         mexc = (order.get("mexc_url") or "").strip()
         gmgn = (order.get("gmgn_url") or "").strip()

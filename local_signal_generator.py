@@ -84,16 +84,14 @@ async def start_polling(
     async with aiohttp.ClientSession(timeout=timeout) as session:
         while True:
             try:
+                min_spread = float(os.getenv("SPREAD_MIN_PERCENT", "1.2"))
+                max_spread = float(os.getenv("SPREAD_MAX_PERCENT", "90.0"))
                 snapshot = await _read_snapshot(session, DATA_PROVIDER_URL)
                 if not snapshot:
                     await asyncio.sleep(backoff)
                     backoff = min(max_backoff, backoff * 2)
                     continue
-
                 backoff = 1.0
-
-                min_spread = float(os.getenv("SPREAD_MIN_PERCENT", "1.2"))
-                max_spread = float(os.getenv("SPREAD_MAX_PERCENT", "90.0"))
 
                 for symbol, data in _iter_snapshot(snapshot):
                     logger.debug(f"Анализирую {symbol}: {data}")
@@ -103,23 +101,14 @@ async def start_polling(
 
                     if best_bid is None or best_ask is None or dex_price is None:
                         continue
-
-                    # 2. Вычисляем среднюю цену на MEXC
                     mexc_mid_price = (best_bid + best_ask) / 2.0
-
-                    # 3. Вычисляем спред
                     spread = _calc_spread_pct(mexc_mid_price, dex_price)
-
-                    # 4. Проверяем спред по заданным порогам
                     if spread is None or not (min_spread <= abs(spread) <= max_spread):
                         if spread is not None:
                             logger.info(f"Спред для {symbol} ({spread:.2f}%) вне диапазона ({min_spread}% - {max_spread}%). Пропускаем.")
                         continue
-
-                    # 5. Готовим и отправляем ордер в очередь
                     pair_key = _norm_pair_key(symbol)
                     base = _base_from_pair(pair_key)
-
                     token_details = tokens_info.get(pair_key, {})
                     order = {
                         "mexc_symbol": pair_key,
@@ -135,9 +124,7 @@ async def start_polling(
                     }
                     await orders_queue.put(order)
                     logger.info(f"Сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})")
-
                 await asyncio.sleep(POLL_PERIOD_SEC)
-
             except aiohttp.ClientConnectorError:
                 logger.error(f"Нет соединения с {DATA_PROVIDER_URL}. Проверь порт/хост.")
                 await asyncio.sleep(backoff)
