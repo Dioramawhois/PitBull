@@ -54,13 +54,12 @@ async def handle_order_create(
         if open_position_on_signal:
             result = await mexc_call(url_mode='create_order', data=payload, auth_token=mexc_auth)
             if result and result.get('success') and result.get('code') == 0:
-                logger.info("Ордер создан - %s, результат: %s", order_info.get('mexc_symbol'), result)
+                logger.info(f"Ордер создан - {order_info.get('mexc_symbol')}, результат: {result}")
                 return result
         if open_browser_on_signal:
-            await open_pair_links(order_info)
+            asyncio.create_task(open_pair_links(order_info))
     except Exception as exc:
         logger.warning(f"Произошла ошибка при обработке ордера: {exc}")
-    logger.error("Ошибка создания ордера для %s: %s", order_info.get('mexc_symbol'), result)
     return None
 
 
@@ -231,7 +230,7 @@ async def handle_order(token, order, redis_client, settings: dict, mexc_auth: st
             logger.info(f"Для {symbol} установлен кулдаун на {success_cooldown}с.")
         notify_beep()
     except Exception as ex:
-        logger.error(f'Критическая ошибка в handle_order для {symbol}: {ex}', exc_info=True)
+        logger.exception(f'Критическая ошибка в handle_order для {symbol}: {ex}', exc_info=True)
     finally:
         token['order_in_process'] = False
         logger.info(f"Обработка для {symbol} завершена.")

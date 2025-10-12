@@ -143,6 +143,6 @@ async def start_polling(
                 await asyncio.sleep(backoff)
                 backoff = min(max_backoff, backoff * 2)
             except Exception as e:
-                logger.exception("Ошибка в локальном генераторе сигналов: %s", e, exc_info=True)
+                logger.exception(f"Ошибка в локальном генераторе сигналов: {e}", exc_info=True)
                 await asyncio.sleep(backoff)
                 backoff = min(max_backoff, backoff * 2)

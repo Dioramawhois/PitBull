@@ -313,7 +313,7 @@ async def get_active_cooldowns():
     return cooldowns
 
 
-@app.post("/clear_cooldown/{symbol}", tags=["Tokens Interaction"])
+@app.post("/clear_cooldown/{symbol}", tags=["Tokens Interaction"], summary="Ручной сброс кулдауна для токена по символу")
 async def clear_cooldown(symbol: str):
     global repo
     if not repo:
@@ -330,6 +330,31 @@ async def clear_cooldown(symbol: str):
     else:
         logger.info(f"Попытка сброса кулдауна для {sym}, но активный кулдаун не найден.")
         return {"ok": True, "message": f"No active cooldown found for {sym}."}
+
+
+
+@app.post("/clear_cooldown/all", tags=["Tokens Interaction"], summary="Сброс кулдаунов для всех токенов")
+async def clear_cooldown_all():
+    global repo
+    if not repo:
+        raise HTTPException(status_code=500, detail="Redis repo not initialized")
+
+    pattern = "cooldown:*"
+    keys_to_delete = [key async for key in repo.r.scan_iter(pattern)]
+
+    if not keys_to_delete:
+        logger.info("Попытка очистить кулдауны, но активных кулдаунов не найдено.")
+        return {"ok": True, "deleted": 0, "message": "No active cooldowns found."}
+
+    deleted = await repo.r.delete(*keys_to_delete)
+
+    symbols = [key.decode("utf-8").split(":", 1)[1] for key in keys_to_delete if b":" in key]
+    logger.info(
+        "Сброс кулдаунов для %d токенов: %s",
+        deleted,
+        ", ".join(symbols) if symbols else "symbols unavailable",
+    )
+    return {"ok": True, "deleted": deleted, "message": "All cooldowns have been cleared."}
 
 
 @app.post("/set_max_margin/{token_symbol}/{margin}", tags=["Tokens Interaction"])

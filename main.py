@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 import aiohttp
 from loguru import logger
@@ -11,7 +12,7 @@ import token_services
 tokens_info = {}
 task_status = {"running": False, "paused": False, 'restart_futures_websocket': False}
 orders_queue = asyncio.Queue()
-
+logger.level(os.getenv("LOG_LEVEL", "INFO").upper())
 
 async def main():
     global tokens_info, task_status

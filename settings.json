@@ -1,7 +1,7 @@
 {
   "IS_HEDGE_MODE": true,
   "leverage": 20,
-  "max_margin": 3,
+  "max_margin": 1,
   "MONITOR_INTERVAL_SECONDS": 10,
 
   "EXCHANGE_STOP_LOSS_PERCENT": 1.5,
@@ -32,5 +32,5 @@
   },
 
   "OPEN_BROWSER_ON_SIGNAL": true,
-  "OPEN_POSITION_ON_SIGNAL": false
+  "OPEN_POSITION_ON_SIGNAL": true
 }
