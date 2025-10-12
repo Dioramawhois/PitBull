@@ -1,13 +1,24 @@
 import asyncio
-import time
+import os
 import platform
 import sys
-from loguru import logger
-import os
+import time
 from math import floor
 
+from loguru import logger
 from redis.asyncio import from_url
-from mexc_futures_calls import mexc_call, create_plan_order, change_leverage, cancel_all_orders, cancel_all_plan_orders, get_open_positions, get_order_by_id
+
+from mexc_futures_calls import (
+    cancel_all_orders,
+    cancel_all_plan_orders,
+    change_leverage,
+    create_plan_order,
+    get_open_positions,
+    get_order_by_id,
+    mexc_call,
+)
+from services.utils.open_link import open_pair_links
+from settings.order import open_position_on_signal
 from token_services import read_file_async
 
 
@@ -30,14 +41,19 @@ def notify_beep():
 
 
 async def handle_order_create(payload: dict, order_info: dict, mexc_auth: str):
-    if not payload:
-        logger.error(f"Создание ордера отменено: пустой payload для {order_info.get('mexc_symbol')}")
-        return None
-    result = await mexc_call(url_mode='create_order', data=payload, auth_token=mexc_auth)
-    if result and result.get('success') and result.get('code') == 0:
-        logger.info(f"Ордер создан - {order_info['mexc_symbol']}, результат: {result}")
-        return result
-    logger.error(f"Ошибка создания ордера для {order_info.get('mexc_symbol')}: {result}")
+    try:
+        if not payload:
+            logger.error("Создание ордера отменено: пустой payload для %s", order_info.get("mexc_symbol"))
+            return None
+        if open_position_on_signal:
+            result = await mexc_call(url_mode='create_order', data=payload, auth_token=mexc_auth)
+            if result and result.get('success') and result.get('code') == 0:
+                logger.info("Ордер создан - %s, результат: %s", order_info.get('mexc_symbol'), result)
+                return result
+        await open_pair_links(order_info)
+    except Exception as exc:
+        logger.warning(f"Произошла ошибка при обработке ордера: {exc}")
+    logger.error("Ошибка создания ордера для %s: %s", order_info.get('mexc_symbol'), result)
     return None
 
 
