@@ -5,7 +5,7 @@ import time
 from typing import Any
 from redis.asyncio import from_url
 
-from mexc_futures_calls import get_open_positions, get_market_ticker, mexc_call, get_all_market_tickers
+from mexc_futures_calls import get_open_positions, mexc_call, get_all_market_tickers
 from settings.auth import mexc_tokens
 from token_services import read_file_async
 from local_signal_generator import _read_snapshot, _iter_snapshot, _norm_pair_key, _calc_spread_pct

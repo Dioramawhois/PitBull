@@ -36,6 +36,7 @@ app.add_middleware(
     allow_credentials=True,
 )
 
+
 class TokenInfo(BaseModel):
     mexc_symbol: str
     base_coin_name: str
@@ -44,11 +45,13 @@ class TokenInfo(BaseModel):
     is_normik: bool = False
     max_margin: Optional[int] = Field(None, ge=0)
 
+
 class TokenUpdate(BaseModel):
     custom_percent: Optional[float] = Field(None, ge=0)
     is_ignored: Optional[bool] = None
     is_normik: Optional[bool] = None
     max_margin: Optional[int] = Field(None, ge=0)
+
 
 def set_context(_tokens_info, _task_status):
     global tokens_info, task_status
@@ -84,18 +87,35 @@ async def load_tokens_on_startup():
         try:
             token_list = list(tokens_info.values())
             await repo.upsert_many(token_list)
-            logger.info("Redis успешно синхронизирован с актуальными данными о токенах.")
+            logger.info(
+                "Redis успешно синхронизирован с актуальными данными о токенах."
+            )
         except Exception as e:
-            logger.error(f"Ошибка при синхронизации токенов с Redis: {e}", exc_info=True)
+            logger.error(
+                f"Ошибка при синхронизации токенов с Redis: {e}", exc_info=True
+            )
     else:
-        logger.warning("Словарь tokens_info пуст на момент старта FastAPI. Redis не обновлен.")
+        logger.warning(
+            "Словарь tokens_info пуст на момент старта FastAPI. Redis не обновлен."
+        )
 
 
-@app.get("/tokens", response_model=List[TokenInfo])
+@app.get(
+    "/tokens",
+    response_model=List[TokenInfo],
+    tags=["Информация о токенах"],
+    summary="Список всех токенов",
+)
 async def list_tokens():
+    """Список всех токенов."""
     return [TokenInfo(**t) for t in tokens_info.values()]
 
-@app.post("/replace_tokens")
+
+@app.post(
+    "/replace_tokens",
+    tags=["Взаимодействие с токенами"],
+    summary="Полная замена списка токенов",
+)
 async def replace_tokens(new_tokens: dict):
     async with TOKENS_LOCK:
         tokens_info.clear()
@@ -104,7 +124,13 @@ async def replace_tokens(new_tokens: dict):
         await save_file_async(TOKENS_JSON, strict_token_field(tokens_info))
     return {"ok": True, "count": len(tokens_info)}
 
-@app.get("/tokens/{symbol}", response_model=TokenInfo)
+
+@app.get(
+    "/tokens/{symbol}",
+    response_model=TokenInfo,
+    tags=["Информация о токенах"],
+    summary="Информация о конкретном токене по символу",
+)
 async def get_token(symbol: str):
     sym = symbol.upper()
     item = tokens_info.get(sym)
@@ -112,7 +138,13 @@ async def get_token(symbol: str):
         raise HTTPException(status_code=404, detail="token not found")
     return TokenInfo(**item)
 
-@app.patch("/tokens/{symbol}", response_model=TokenInfo, tags=["Tokens"])
+
+@app.patch(
+    "/tokens/{symbol}",
+    response_model=TokenInfo,
+    tags=["Взаимодействие с токенами"],
+    summary="Частичное обновление информации о токене по символу",
+)
 async def patch_token(symbol: str, patch: TokenUpdate):
     sym = symbol.upper()
     async with TOKENS_LOCK:
@@ -130,7 +162,12 @@ class BulkUpdateItem(BaseModel):
     symbol: str
     data: TokenUpdate
 
-@app.patch("/tokens:bulk", tags=["Tokens"])
+
+@app.patch(
+    "/tokens:bulk",
+    tags=["Взаимодействие с токенами"],
+    summary="Массовое частичное обновление информации о токенах",
+)
 async def bulk_patch(items: List[BulkUpdateItem]):
     updated = 0
     async with TOKENS_LOCK:
@@ -146,7 +183,12 @@ async def bulk_patch(items: List[BulkUpdateItem]):
         await save_file_async(TOKENS_JSON, strict_token_field(tokens_info))
     return {"ok": True, "updated": updated}
 
-@app.post("/reload_tokens")
+
+@app.post(
+    "/reload_tokens",
+    tags=["Взаимодействие с токенами"],
+    summary="Перезагрузка токенов из файла",
+)
 async def reload_tokens():
     data = await read_file_async(TOKENS_JSON)
     if not isinstance(data, dict):
@@ -157,136 +199,142 @@ async def reload_tokens():
         await repo.upsert_many(tokens_info.values())
     return {"ok": True, "count": len(tokens_info)}
 
-@app.post("/start-compare", tags=["Compare Task"])
-async def start_compare_endpoint():
-    global background_task, task_status, tokens_info
 
-    if task_status['paused'] is False:
-        raise HTTPException(status_code=400, detail="Compare task is not on pause")
-
-    task_status["paused"] = False
-    return {"message": "Compare task started."}
-
-    
-@app.post("/stop-compare", tags=["Compare Task"])
-async def stop_compare_endpoint():
-    global background_task, task_status
-
-    if task_status["paused"]:
-        raise HTTPException(status_code=400, detail="Compare task is on pause")
-
-    task_status["paused"] = True
-    return {"message": "Compare task paused."}
-
-
-@app.post("/clear_in_process", tags=["Compare Task"])
+@app.post(
+    "/clear_in_process",
+    tags=["Compare Task"],
+    include_in_schema=False,
+)
 async def clear_in_process():
-
     for tokens in tokens_info.values():
-        if tokens.get('order_in_process', False):
-            tokens['order_in_process'] = False
+        if tokens.get("order_in_process", False):
+            tokens["order_in_process"] = False
     msg = "Cleared in process"
     logger.info(msg)
-    return {'msg': msg}
+    return {"msg": msg}
 
 
-@app.post("/ignore_token/{symbol}", tags=["Tokens Interaction"])
+@app.post(
+    "/ignore_token/{symbol}",
+    tags=["Взаимодействие с токенами"],
+    summary="Игнорировать токен",
+)
 async def ignore_token(symbol: str):
     sym = symbol.upper()
     token = tokens_info.get(sym)
     if not token:
-        return {'msg': f"Cannot find token with provided symbol - {sym}"}
+        return {"msg": f"Cannot find token with provided symbol - {sym}"}
 
     if token.get("is_ignored", False):
-        return {'msg': f"Token is already ignored - {sym}"}
+        return {"msg": f"Token is already ignored - {sym}"}
 
-    token['is_ignored'] = True
+    token["is_ignored"] = True
 
     filtered_data = strict_token_field(tokens_info)
-    await save_file_async('tokens_info_dict.json', filtered_data)
+    await save_file_async("tokens_info_dict.json", filtered_data)
     logger.info(f"{sym} now is ignored")
-    return {'msg': f"{sym} now is ignored"}
+    return {"msg": f"{sym} now is ignored"}
 
 
-@app.post("/unignore_token/{symbol}", tags=["Tokens Interaction"])
+@app.post(
+    "/unignore_token/{symbol}",
+    tags=["Взаимодействие с токенами"],
+    summary="Перестать игнорировать токен",
+)
 async def unignore_token(symbol: str):
     global task_status
     sym = symbol.upper()
     token = tokens_info.get(sym)
     if not token:
-        return {'msg': f"Cannot find token with provided symbol - {sym}"}
+        return {"msg": f"Cannot find token with provided symbol - {sym}"}
 
-    task_status['restart_futures_websocket'] = True
+    task_status["restart_futures_websocket"] = True
     if not token.get("is_ignored", True):
-        return {'msg': f"Token is not ignored - {sym}"}
+        return {"msg": f"Token is not ignored - {sym}"}
 
-    token['is_ignored'] = False
+    token["is_ignored"] = False
     filtered_data = strict_token_field(tokens_info)
-    await save_file_async('tokens_info_dict.json', filtered_data)
+    await save_file_async("tokens_info_dict.json", filtered_data)
     logger.info(f"{sym} now is not ignored")
-    return {'msg': f"{sym} now is not ignored"}
+    return {"msg": f"{sym} now is not ignored"}
 
 
-@app.post("/set_max_margin/{token_symbol}/{margin}", tags=["Tokens Interaction"])
-async def set_max_margin(token_symbol: str, margin: float):
-
-    token = next((t for t in tokens_info.values() if t['base_coin_name'] == token_symbol), None)
+@app.post(
+    "/set_normik_pair/{token_symbol}/{margin}",
+    tags=["Взаимодействие с токенами"],
+    summary="Включить открытие позиций для токена",
+)
+async def set_normik_pair(token_symbol: str, margin: float):
+    token = next(
+        (t for t in tokens_info.values() if t["base_coin_name"] == token_symbol), None
+    )
     if not token:
-        return {'msg': f"Cannot find token with provided symbol - {token_symbol}"}
-
-    token['max_margin'] = margin
-
+        return {"msg": f"Cannot find token with provided symbol - {token_symbol}"}
+    token["max_margin"] = margin
     filtered_data = strict_token_field(tokens_info)
-    await save_file_async('tokens_info_dict.json', filtered_data)
+    await save_file_async("tokens_info_dict.json", filtered_data)
     logger.info(f"{token_symbol} now obtain max margin - {margin}")
-    return {'msg': f"{token_symbol} now obtain max margin - {margin}"}
+    return {"msg": f"{token_symbol} now obtain max margin - {margin}"}
 
 
-@app.post("/unset_normik_pair/{token_symbol}", tags=["Tokens Interaction"])
+@app.post(
+    "/unset_normik_pair/{token_symbol}",
+    tags=["Взаимодействие с токенами"],
+    summary="Выключить открытие позиций для токена",
+)
 async def unset_normik_pair(token_symbol: str):
-
-    token = next((t for t in tokens_info.values() if t['base_coin_name'] == token_symbol), None)
+    token = next(
+        (t for t in tokens_info.values() if t["base_coin_name"] == token_symbol), None
+    )
     if not token:
-        return {'msg': f"Cannot find token with provided symbol - {token_symbol}"}
+        return {"msg": f"Cannot find token with provided symbol - {token_symbol}"}
 
     if token.get("is_normik", False) is False:
-        return {'msg': f"Token is not normik - {token_symbol}"}
+        return {"msg": f"Token is not normik - {token_symbol}"}
 
-    token['is_normik'] = False
+    token["is_normik"] = False
     filtered_data = strict_token_field(tokens_info)
-    await save_file_async('tokens_info_dict.json', filtered_data)
+    await save_file_async("tokens_info_dict.json", filtered_data)
     logger.info(f"{token_symbol} now is not normik")
-    return {'msg': f"{token_symbol} now is not normik"}
+    return {"msg": f"{token_symbol} now is not normik"}
 
 
-@app.post("/set_custom_percent/{pair_symbol}/{percent}", tags=["Tokens Interaction"])
+@app.post(
+    "/set_custom_percent/{pair_symbol}/{percent}",
+    tags=["Взаимодействие с токенами"],
+    summary="Установить пользовательский процент для токена",
+)
 async def set_custom_percent(pair_symbol: str, percent: str):
-
     if pair_symbol not in tokens_info:
-        return {'msg': f"Cannot find pair with provided symbol - {pair_symbol}"}
+        return {"msg": f"Cannot find pair with provided symbol - {pair_symbol}"}
 
     token = tokens_info[pair_symbol]
 
     try:
         percent_int = int(percent)
-        custom_percent = token.get('custom_percent', None)
+        custom_percent = token.get("custom_percent", None)
         if custom_percent and custom_percent == percent_int:
-            return {'msg': f"{pair_symbol} already obtain this percent: {percent}"}
+            return {"msg": f"{pair_symbol} already obtain this percent: {percent}"}
 
         if percent_int == 0:
-            token['custom_percent'] = None
+            token["custom_percent"] = None
         else:
-            token['custom_percent'] = percent_int
+            token["custom_percent"] = percent_int
     except ValueError:
-        return {'msg': f"Invalid percent pair_symbol - {percent}"}
+        return {"msg": f"Invalid percent pair_symbol - {percent}"}
 
     filtered_data = strict_token_field(tokens_info)
-    await save_file_async('tokens_info_dict.json', filtered_data)
+    await save_file_async("tokens_info_dict.json", filtered_data)
     logger.info(f"{pair_symbol} now obtain custom percent: {percent}")
-    return {'msg': f"{pair_symbol} now obtain custom percent: {percent}"}
+    return {"msg": f"{pair_symbol} now obtain custom percent: {percent}"}
 
 
-@app.get("/active_cooldowns", response_model=List[Dict[str, Any]], tags=["Tokens Information"])
+@app.get(
+    "/active_cooldowns",
+    response_model=List[Dict[str, Any]],
+    tags=["Кулдауны токенов"],
+    summary="Просмотр активных кулдаунов из Redis",
+)
 async def get_active_cooldowns():
     """
     Просмотр тоукенов которые находятся в кеше Redis.
@@ -297,19 +345,20 @@ async def get_active_cooldowns():
 
     cooldowns = []
     async for key_bytes in repo.r.scan_iter("cooldown:*"):
-        key_str = key_bytes.decode('utf-8')
+        key_str = key_bytes.decode("utf-8")
         ttl = await repo.r.ttl(key_bytes)
         symbol = key_str.split(":", 1)[1]
-        cooldowns.append({
-            "symbol": symbol,
-            "cooldown_seconds_remaining": ttl
-        })
+        cooldowns.append({"symbol": symbol, "cooldown_seconds_remaining": ttl})
 
     logger.info(msg=f"Načteno {len(cooldowns)} aktivních cooldownů z Redis.")
     return cooldowns
 
 
-@app.post("/clear_cooldown/{symbol}", tags=["Tokens Interaction"], summary="Ручной сброс кулдауна для токена по символу")
+@app.post(
+    "/clear_cooldown/{symbol}",
+    tags=["Кулдауны токенов"],
+    summary="Ручной сброс кулдауна для токена по символу",
+)
 async def clear_cooldown(symbol: str):
     global repo
     if not repo:
@@ -324,12 +373,17 @@ async def clear_cooldown(symbol: str):
         logger.info(f"Ручной сброс кулдауна для токена: {sym}")
         return {"ok": True, "message": f"Cooldown for {sym} has been cleared."}
     else:
-        logger.info(f"Попытка сброса кулдауна для {sym}, но активный кулдаун не найден.")
+        logger.info(
+            f"Попытка сброса кулдауна для {sym}, но активный кулдаун не найден."
+        )
         return {"ok": True, "message": f"No active cooldown found for {sym}."}
 
 
-
-@app.post("/clear-all-cooldown", tags=["Tokens Interaction"], summary="Сброс кулдаунов для всех токенов")
+@app.post(
+    "/clear-all-cooldown",
+    tags=["Кулдауны токенов"],
+    summary="Сброс кулдаунов для всех токенов",
+)
 async def clear_cooldown_all():
     """Сбрасывает куллдауны для всех токенов в Redis."""
     global repo
@@ -343,72 +397,117 @@ async def clear_cooldown_all():
     return cooldowns
 
 
-@app.post("/set_max_margin/{token_symbol}/{margin}", tags=["Tokens Interaction"])
-async def set_normik_pair(token_symbol: str, margin: float):
-
-    token = next((t for t in tokens_info.values() if t['base_coin_name'] == token_symbol), None)
+@app.post(
+    "/set_max_margin/{token_symbol}/{margin}",
+    tags=["Взаимодействие с токенами"],
+    summary="Установить максимальную маржу для токена",
+)
+async def set_max_margin(token_symbol: str, margin: float):
+    token = next(
+        (t for t in tokens_info.values() if t["base_coin_name"] == token_symbol), None
+    )
     if not token:
-        return {'msg': f"Cannot find token with provided symbol - {token_symbol}"}
+        return {"msg": f"Cannot find token with provided symbol - {token_symbol}"}
 
-    token['max_margin'] = margin
+    token["max_margin"] = margin
 
     filtered_data = strict_token_field(tokens_info)
-    await save_file_async('tokens_info_dict.json', filtered_data)
+    await save_file_async("tokens_info_dict.json", filtered_data)
     logger.info(f"{token_symbol} now obtain max margin - {margin}")
-    return {'msg': f"{token_symbol} now obtain max margin - {margin}"}
+    return {"msg": f"{token_symbol} now obtain max margin - {margin}"}
 
 
-
-@app.get("/ignored_pairs", response_model=List[str], tags=["Tokens Information"])
+@app.get(
+    "/ignored_pairs",
+    response_model=List[str],
+    tags=["Информация о токенах"],
+    summary="Список игнорируемых токенов",
+)
 async def ignored_pairs():
-    return [token['mexc_symbol'] for token in tokens_info.values() if token.get('is_ignored', True)]
+    return [
+        token["mexc_symbol"]
+        for token in tokens_info.values()
+        if token.get("is_ignored", True)
+    ]
 
 
-@app.get("/unignored_pairs", response_model=List[str], tags=["Tokens Information"])
+@app.get(
+    "/unignored_pairs",
+    response_model=List[str],
+    tags=["Информация о токенах"],
+    summary="Список неигнорируемых токенов",
+)
 async def unignored_pairs():
-    return [token['mexc_symbol'] for token in tokens_info.values() if token.get('is_ignored', True) is False]
+    return [
+        token["mexc_symbol"]
+        for token in tokens_info.values()
+        if token.get("is_ignored", True) is False
+    ]
 
 
-@app.get("/normik_pairs",  tags=["Tokens Information"])
+@app.get(
+    "/normik_pairs",
+    tags=["Информация о токенах"],
+    summary="Список токенов с открытием позиций",
+)
 async def normik_pairs():
     pairs = []
     for mexc_symbol, token in tokens_info.items():
-        if token.get('is_normik', False):
+        if token.get("is_normik", False):
             is_ignored = token.get("is_ignored", None)
             is_normik = token.get("is_normik", None)
 
-            pairs.append({
-                "mexc_symbol": mexc_symbol,
-                "base_coin_name": token['base_coin_name'],
-                "is_ignored": is_ignored,
-                "is_normik": is_normik,
-            })
+            pairs.append(
+                {
+                    "mexc_symbol": mexc_symbol,
+                    "base_coin_name": token["base_coin_name"],
+                    "is_ignored": is_ignored,
+                    "is_normik": is_normik,
+                }
+            )
 
     return pairs
-@app.get("/not_normik_pairs",  tags=["Tokens Information"])
+
+
+@app.get(
+    "/not_normik_pairs",
+    tags=["Информация о токенах"],
+    summary="Список токенов без открытия позиций",
+)
 async def not_normik_pairs():
     pairs = []
     for mexc_symbol, token in tokens_info.items():
-        if token.get('is_ignored', True) is False and token.get('is_normik', False) is False:
+        if (
+            token.get("is_ignored", True) is False
+            and token.get("is_normik", False) is False
+        ):
             is_ignored = token.get("is_ignored", None)
             is_normik = token.get("is_normik", None)
 
-            pairs.append({
-                "mexc_symbol": mexc_symbol,
-                "base_coin_name": token['base_coin_name'],
-                "is_ignored": is_ignored,
-                "is_normik": is_normik,
-            })
+            pairs.append(
+                {
+                    "mexc_symbol": mexc_symbol,
+                    "base_coin_name": token["base_coin_name"],
+                    "is_ignored": is_ignored,
+                    "is_normik": is_normik,
+                }
+            )
 
     return pairs
 
-@app.get("/token_info/{token_symbol}", response_model=dict, tags=["Tokens Information"])
+
+@app.get(
+    "/token_info/{token_symbol}",
+    response_model=dict,
+    tags=["Информация о токенах"],
+    summary="Информация о токене по базовому символу",
+)
 async def pair_info(token_symbol: str):
-    token = next((t for t in tokens_info.values() if t['base_coin_name'] == token_symbol), None)
+    token = next(
+        (t for t in tokens_info.values() if t["base_coin_name"] == token_symbol), None
+    )
 
     if not token:
-        return {'msg': f"Cannot find pair with provided symbol - {token_symbol}"}
+        return {"msg": f"Cannot find pair with provided symbol - {token_symbol}"}
 
     return token
-
-
