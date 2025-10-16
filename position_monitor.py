@@ -193,10 +193,11 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                             if vol_scale == 0: final_vol_to_close = int(final_vol_to_close)
 
                             reason = f"Scaling Out (Цель #{i + 1}: {target['pnl_percent']}%)"
-                            if await close_position(pos, auth_token, reason, close_vol=final_vol_to_close):
-                                await redis.set(target_key, 1, ex=86400)  # Помечаем цель как достигнутую
-                                target_hit = True
-                            break  # Выходим из цикла по целям, т.к. размер позиции изменился
+                            for auth_token in auth_tokens:
+                                if await close_position(pos, auth_token, reason, close_vol=final_vol_to_close):
+                                    await redis.set(target_key, 1, ex=86400)  # Помечаем цель как достигнутую
+                                    target_hit = True
+                                break  # Выходим из цикла по целям, т.к. размер позиции изменился
                     if target_hit:
                         continue  # Переходим к следующей позиции в общем списке
 
@@ -204,16 +205,17 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                 stop_loss_pct = settings.get('EXCHANGE_STOP_LOSS_PERCENT')
                 if stop_loss_pct and pnl_pct <= -abs(stop_loss_pct):
                     reason = f"Stop Loss ({pnl_pct:.2f}%)"
-                    if await close_position(pos, auth_token, reason):
-                        # Кулдаун после убытка, очистка следов
-                        loss_cooldown = settings.get('LOSS_COOLDOWN_SECONDS', 900)
-                        await redis.set(f"cooldown:{symbol}", 1, ex=loss_cooldown)
-                        await asyncio.gather(
-                            redis.delete(peak_price_key),
-                            redis.delete(initial_spread_key),
-                            redis.delete(initial_vol_key),
-                        )
-                        continue  # Позиция закрыта — к следующей
+                    for auth_token in auth_tokens:
+                        if await close_position(pos, auth_token, reason):
+                            # Кулдаун после убытка, очистка следов
+                            loss_cooldown = settings.get('LOSS_COOLDOWN_SECONDS', 900)
+                            await redis.set(f"cooldown:{symbol}", 1, ex=loss_cooldown)
+                            await asyncio.gather(
+                                redis.delete(peak_price_key),
+                                redis.delete(initial_spread_key),
+                                redis.delete(initial_vol_key),
+                            )
+                            continue  # Позиция закрыта — к следующей
 
                 # --- 5. Trailing Stop: только после активации в плюсе ---
                 use_trailing = settings.get('USE_TRAILING_STOP', False)
@@ -238,13 +240,14 @@ async def start_monitoring(tokens_info: dict[str, Any]):
 
                     if trigger_hit:
                         reason = f"Trailing Stop (откат {trailing_pct}% от пика {peak_price})"
-                        if await close_position(pos, auth_token, reason):
-                            await asyncio.gather(
-                                redis.delete(peak_price_key),
-                                redis.delete(initial_spread_key),
-                                redis.delete(initial_vol_key),
-                            )
-                            continue
+                        for auth_token in auth_tokens:
+                            if await close_position(pos, auth_token, reason):
+                                await asyncio.gather(
+                                    redis.delete(peak_price_key),
+                                    redis.delete(initial_spread_key),
+                                    redis.delete(initial_vol_key),
+                                )
+                                continue
 
                 # --- 6. Тайм-аут позиции: выполняется независимо от трейлинга ---
                 max_pos_hours = settings.get('MAX_POSITION_HOURS')
@@ -252,16 +255,17 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                     age_hours = (time.time() * 1000 - open_time_ms) / 3_600_000
                     if age_hours > max_pos_hours:
                         reason = "Таймаут позиции"
-                        if await close_position(pos, auth_token, reason):
-                            timeout_cooldown = settings.get('TIMEOUT_COOLDOWN_SECONDS', 600)
-                            await redis.set(f"cooldown:{symbol}", 1, ex=timeout_cooldown)
-                            logger.warning(f"Для {symbol} установлен кулдаун на {timeout_cooldown}с после таймаута.")
-                            await asyncio.gather(
-                                redis.delete(peak_price_key),
-                                redis.delete(initial_spread_key),
-                                redis.delete(initial_vol_key),
-                            )
-                            continue
+                        for auth_token in auth_tokens:
+                            if await close_position(pos, auth_token, reason):
+                                timeout_cooldown = settings.get('TIMEOUT_COOLDOWN_SECONDS', 600)
+                                await redis.set(f"cooldown:{symbol}", 1, ex=timeout_cooldown)
+                                logger.warning(f"Для {symbol} установлен кулдаун на {timeout_cooldown}с после таймаута.")
+                                await asyncio.gather(
+                                    redis.delete(peak_price_key),
+                                    redis.delete(initial_spread_key),
+                                    redis.delete(initial_vol_key),
+                                )
+                                continue
 
             await asyncio.sleep(interval)
 
