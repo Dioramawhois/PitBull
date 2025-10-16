@@ -1,17 +1,17 @@
 {
-  "IS_HEDGE_MODE": true,
+  "IS_HEDGE_MODE": false,
   "leverage": 20,
-  "max_margin": 1,
+  "max_margin": 0.8,
   "MONITOR_INTERVAL_SECONDS": 10,
 
   "EXCHANGE_STOP_LOSS_PERCENT": 1.5,
-  "USE_SCALING_OUT": true,
+  "USE_SCALING_OUT": false,
   "SCALING_OUT_TARGETS": [
     {"pnl_percent": 2.0, "close_fraction": 0.5},
     {"pnl_percent": 4.0, "close_fraction": 0.5}
   ],
 
-  "USE_TRAILING_STOP": true,
+  "USE_TRAILING_STOP": false,
   "TRAILING_ACTIVATION_PERCENT": 1.5,
   "TRAILING_PERCENT": 0.8,
 
@@ -32,5 +32,6 @@
   },
 
   "OPEN_BROWSER_ON_SIGNAL": true,
-  "OPEN_POSITION_ON_SIGNAL": false
+  "OPEN_POSITION_ON_SIGNAL": true,
+  "CLOSE_POSITION": false
 }

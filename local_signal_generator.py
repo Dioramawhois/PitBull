@@ -8,7 +8,7 @@ from loguru import logger
 
 DATA_PROVIDER_URL = os.getenv("DATA_PROVIDER_URL", "http://127.0.0.1:8001/state")
 
-SPREAD_THRESHOLD_PERCENT = float(os.getenv("SPREAD_THRESHOLD_PERCENT", "1.2"))
+SPREAD_THRESHOLD_PERCENT = float(os.getenv("SPREAD_THRESHOLD_PERCENT", "0.5"))
 POLL_PERIOD_SEC = float(os.getenv("POLL_PERIOD_SEC", "13.0"))
 
 
@@ -47,6 +47,7 @@ def _iter_snapshot(snapshot: Any) -> Iterable[tuple[str, dict]]:
 
 
 async def _read_snapshot(session: aiohttp.ClientSession, url: str) -> Any:
+    logger.info(f"Чтение снапшота из {url}...")
     async with session.get(url, headers={"Accept": "application/json"}) as resp:
         status = resp.status
         ctype = resp.headers.get("Content-Type", "")
@@ -99,6 +100,7 @@ async def start_polling(
                     dex_price = data.get("dex")
 
                     if best_bid is None or best_ask is None or dex_price is None:
+                        logger.debug(f"Пропускаю {symbol}: нет bid/ask/dex_price.")
                         continue
                     mexc_mid_price = (best_bid + best_ask) / 2.0
                     spread = _calc_spread_pct(mexc_mid_price, dex_price)

@@ -227,7 +227,7 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                 initial_vol_key = f"initial_vol:{pos_id}"
 
                 # --- 2. Стратегия "Pyramiding" (Добавление к прибыльной позиции) ---
-                if settings.get("USE_PYRAMIDING"):
+                if settings.get("USE_PYRAMIDING", False) is True:
                     pyramiding_config = settings.get("PYRAMIDING_CONFIG", {})
                     pnl_threshold = pyramiding_config.get("pnl_threshold_percent", 999)
 
@@ -272,7 +272,7 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                                             )
 
                 # --- 3. Стратегия "Scaling Out" (Частичная фиксация прибыли) ---
-                if settings.get("USE_SCALING_OUT"):
+                if settings.get("USE_SCALING_OUT", False) is True:
                     scaling_targets = settings.get("SCALING_OUT_TARGETS", [])
                     initial_vol_str = await redis.get(initial_vol_key)
                     if not initial_vol_str:
@@ -313,8 +313,8 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                         continue  # Переходим к следующей позиции в общем списке
 
                 # --- 4. Жёсткий Stop-Loss: всегда активен, независимо от трейлинга ---
-                stop_loss_pct = settings.get("EXCHANGE_STOP_LOSS_PERCENT")
-                if stop_loss_pct and pnl_pct <= -abs(stop_loss_pct):
+                stop_loss_pct = bool(settings.get("EXCHANGE_STOP_LOSS_PERCENT"))
+                if stop_loss_pct is True and pnl_pct <= -abs(stop_loss_pct):
                     reason = f"Stop Loss ({pnl_pct:.2f}%)"
                     for auth_token in auth_tokens:
                         if await close_position(pos, auth_token, reason):
@@ -329,9 +329,9 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                             continue  # Позиция закрыта — к следующей
 
                 # --- 5. Trailing Stop: только после активации в плюсе ---
-                use_trailing = settings.get("USE_TRAILING_STOP", False)
+                use_trailing = bool(settings.get("USE_TRAILING_STOP", False))
                 activation_pct = settings.get("TRAILING_ACTIVATION_PERCENT", 0.5)
-                if use_trailing and pnl_pct >= activation_pct:
+                if use_trailing is True and pnl_pct >= activation_pct:
                     trailing_pct = settings.get("TRAILING_PERCENT", 0.2)
                     peak_price_str = await redis.get(peak_price_key)
                     peak_price = (
