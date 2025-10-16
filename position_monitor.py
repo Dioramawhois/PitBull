@@ -23,13 +23,15 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
 class SpreadTracker:
-    def __init__(self, url, period_sec):
-        self._url, self._period, self._spreads, self._task = (
-            url,
-            period_sec,
-            {},
-            None,
-        )
+    def __init__(
+        self,
+        url,
+        period_sec,
+    ):
+        self._url = url
+        self._period = period_sec
+        self._spreads = {}
+        self._task = None
 
     async def _fetch_spreads(self):
         import aiohttp
