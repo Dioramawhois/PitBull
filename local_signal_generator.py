@@ -104,7 +104,7 @@ async def start_polling(
                     spread = _calc_spread_pct(mexc_mid_price, dex_price)
                     if spread is None or not (min_spread <= abs(spread) <= max_spread):
                         if spread is not None:
-                            logger.info(f"Спред для {symbol} ({spread:.2f}%) вне диапазона ({min_spread}% - {max_spread}%). Пропускаем.")
+                            logger.info(f"Спред для {symbol} ({abs(spread):.2f}%) вне диапазона ({min_spread}% - {max_spread}%). Пропускаем.")
                         continue
                     pair_key = _norm_pair_key(symbol)
                     base = _base_from_pair(pair_key)
