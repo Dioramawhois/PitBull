@@ -1,7 +1,7 @@
 {
   "IS_HEDGE_MODE": false,
   "leverage": 20,
-  "max_margin": 0.8,
+  "max_margin": 0.5,
   "MONITOR_INTERVAL_SECONDS": 10,
 
   "EXCHANGE_STOP_LOSS_PERCENT": 1.5,

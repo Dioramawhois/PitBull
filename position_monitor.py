@@ -1,26 +1,25 @@
 import asyncio
 import logging
 import os
-import time
 from typing import Any
+
 from redis.asyncio import from_url
 
-from mexc_futures_calls import get_open_positions, mexc_call, get_all_market_tickers
-from settings.auth import mexc_tokens
-from token_services import read_file_async
 from local_signal_generator import (
-    _read_snapshot,
+    _calc_spread_pct,
     _iter_snapshot,
     _norm_pair_key,
-    _calc_spread_pct,
+    _read_snapshot,
 )
+from mexc_futures_calls import get_all_market_tickers, get_open_positions, mexc_call
 
 # Импортируем функции для создания ордеров из order_process
-from order_process import prepare_payload, handle_order_create
+from order_process import handle_order_create, prepare_payload
+from settings.auth import mexc_tokens
+from token_services import read_file_async
 
 logger = logging.getLogger(__name__)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
 
 class SpreadTracker:
     def __init__(
@@ -221,11 +220,6 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                     f"{log_prefix} PnL: {pnl_pct:.3f}% (Вход: {entry_price}, Сейчас: {current_price})"
                 )
 
-                # Ключи Redis для хранения состояния этой позиции
-                peak_price_key = f"peak_price:{pos_id}"
-                initial_spread_key = f"initial_spread:{pos_id}"
-                initial_vol_key = f"initial_vol:{pos_id}"
-
                 # --- 2. Стратегия "Pyramiding" (Добавление к прибыльной позиции) ---
                 if settings.get("USE_PYRAMIDING", False) is True:
                     pyramiding_config = settings.get("PYRAMIDING_CONFIG", {})
@@ -263,129 +257,17 @@ async def start_monitoring(tokens_info: dict[str, Any]):
                                 if new_payload:
                                     for auth_token in auth_tokens:
                                         add_result = await handle_order_create(
-                                            new_payload, order_like, auth_token
+                                            payload=new_payload,
+                                            order_info=order_like,
+                                            mexc_auth=auth_token,
+                                            open_position_on_signal=settings.get("OPEN_POSITION_ON_SIGNAL", False),
+                                            open_browser_on_signal=settings.get("OPEN_BROWSER_ON_SIGNAL", True),
                                         )
                                         if add_result and add_result.get("success"):
                                             await redis.incr(pyramiding_entries_key)
                                             logger.info(
                                                 f"{log_prefix} УСПЕШНО добавлено к позиции."
                                             )
-
-                # --- 3. Стратегия "Scaling Out" (Частичная фиксация прибыли) ---
-                if settings.get("USE_SCALING_OUT", False) is True:
-                    scaling_targets = settings.get("SCALING_OUT_TARGETS", [])
-                    initial_vol_str = await redis.get(initial_vol_key)
-                    if not initial_vol_str:
-                        await redis.set(initial_vol_key, hold_vol)
-                        initial_vol = float(hold_vol)
-                    else:
-                        initial_vol = float(initial_vol_str)
-
-                    target_hit = False
-                    for i, target in enumerate(
-                        sorted(scaling_targets, key=lambda x: x["pnl_percent"])
-                    ):
-                        target_key = f"scaling_target_hit:{pos_id}:{i}"
-                        if pnl_pct >= target["pnl_percent"] and not await redis.exists(
-                            target_key
-                        ):
-                            vol_to_close = initial_vol * target["close_fraction"]
-                            final_vol_to_close = round(vol_to_close, vol_scale)
-                            if vol_scale == 0:
-                                final_vol_to_close = int(final_vol_to_close)
-
-                            reason = (
-                                f"Scaling Out (Цель #{i + 1}: {target['pnl_percent']}%)"
-                            )
-                            for auth_token in auth_tokens:
-                                if await close_position(
-                                    pos,
-                                    auth_token,
-                                    reason,
-                                    close_vol=final_vol_to_close,
-                                ):
-                                    await redis.set(
-                                        target_key, 1, ex=86400
-                                    )  # Помечаем цель как достигнутую
-                                    target_hit = True
-                                break  # Выходим из цикла по целям, т.к. размер позиции изменился
-                    if target_hit:
-                        continue  # Переходим к следующей позиции в общем списке
-
-                # --- 4. Жёсткий Stop-Loss: всегда активен, независимо от трейлинга ---
-                stop_loss_pct = bool(settings.get("EXCHANGE_STOP_LOSS_PERCENT"))
-                if stop_loss_pct is True and pnl_pct <= -abs(stop_loss_pct):
-                    reason = f"Stop Loss ({pnl_pct:.2f}%)"
-                    for auth_token in auth_tokens:
-                        if await close_position(pos, auth_token, reason):
-                            # Кулдаун после убытка, очистка следов
-                            loss_cooldown = settings.get("LOSS_COOLDOWN_SECONDS", 900)
-                            await redis.set(f"cooldown:{symbol}", 1, ex=loss_cooldown)
-                            await asyncio.gather(
-                                redis.delete(peak_price_key),
-                                redis.delete(initial_spread_key),
-                                redis.delete(initial_vol_key),
-                            )
-                            continue  # Позиция закрыта — к следующей
-
-                # --- 5. Trailing Stop: только после активации в плюсе ---
-                use_trailing = bool(settings.get("USE_TRAILING_STOP", False))
-                activation_pct = settings.get("TRAILING_ACTIVATION_PERCENT", 0.5)
-                if use_trailing is True and pnl_pct >= activation_pct:
-                    trailing_pct = settings.get("TRAILING_PERCENT", 0.2)
-                    peak_price_str = await redis.get(peak_price_key)
-                    peak_price = (
-                        float(peak_price_str) if peak_price_str else entry_price
-                    )
-
-                    if pos_type == 1:  # LONG
-                        if current_price > peak_price:
-                            peak_price = current_price
-                            await redis.set(peak_price_key, peak_price)
-                        trigger_price = peak_price * (1 - trailing_pct / 100)
-                        trigger_hit = current_price <= trigger_price
-                    else:  # SHORT
-                        if current_price < peak_price:
-                            peak_price = current_price
-                            await redis.set(peak_price_key, peak_price)
-                        trigger_price = peak_price * (1 + trailing_pct / 100)
-                        trigger_hit = current_price >= trigger_price
-
-                    if trigger_hit:
-                        reason = f"Trailing Stop (откат {trailing_pct}% от пика {peak_price})"
-                        for auth_token in auth_tokens:
-                            if await close_position(pos, auth_token, reason):
-                                await asyncio.gather(
-                                    redis.delete(peak_price_key),
-                                    redis.delete(initial_spread_key),
-                                    redis.delete(initial_vol_key),
-                                )
-                                continue
-
-                # --- 6. Тайм-аут позиции: выполняется независимо от трейлинга ---
-                max_pos_hours = settings.get("MAX_POSITION_HOURS")
-                if max_pos_hours:
-                    age_hours = (time.time() * 1000 - open_time_ms) / 3_600_000
-                    if age_hours > max_pos_hours:
-                        reason = "Таймаут позиции"
-                        for auth_token in auth_tokens:
-                            if await close_position(pos, auth_token, reason):
-                                timeout_cooldown = settings.get(
-                                    "TIMEOUT_COOLDOWN_SECONDS", 600
-                                )
-                                await redis.set(
-                                    f"cooldown:{symbol}", 1, ex=timeout_cooldown
-                                )
-                                logger.warning(
-                                    f"Для {symbol} установлен кулдаун на {timeout_cooldown}с после таймаута."
-                                )
-                                await asyncio.gather(
-                                    redis.delete(peak_price_key),
-                                    redis.delete(initial_spread_key),
-                                    redis.delete(initial_vol_key),
-                                )
-                                continue
-
             await asyncio.sleep(interval)
 
         except Exception as e:
