@@ -1,35 +1,14 @@
 {
   "IS_HEDGE_MODE": false,
-  "leverage": 20,
-  "max_margin": 0.5,
-  "MONITOR_INTERVAL_SECONDS": 10,
+  "leverage": 5,
+  "max_margin": 6,
 
-  "EXCHANGE_STOP_LOSS_PERCENT": 1.5,
-  "USE_SCALING_OUT": false,
-  "SCALING_OUT_TARGETS": [
-    {"pnl_percent": 2.0, "close_fraction": 0.5},
-    {"pnl_percent": 4.0, "close_fraction": 0.5}
-  ],
-
-  "USE_TRAILING_STOP": false,
-  "TRAILING_ACTIVATION_PERCENT": 1.5,
-  "TRAILING_PERCENT": 0.8,
-
-  "MAX_POSITION_HOURS": 4,
-  "SPREAD_CLOSE_THRESHOLD_PERCENT": 80.0,
+  "EXCHANGE_STOP_LOSS_PERCENT": 10,
+  "EXCHANGE_TAKE_PROFIT_PERCENT": 2,
 
   "USE_COOLDOWN": true,
   "COOLDOWN_SECONDS": 300,
-  "LOSS_COOLDOWN_SECONDS": 900,
-  "TIMEOUT_COOLDOWN_SECONDS": 600,
   "ENTRY_ORDER_TYPE": "market",
-
-  "USE_PYRAMIDING": false,
-  "PYRAMIDING_CONFIG": {
-    "pnl_threshold_percent": 3.0,
-    "add_margin_amount": 5,
-    "max_entries": 2
-  },
 
   "OPEN_BROWSER_ON_SIGNAL": true,
   "OPEN_POSITION_ON_SIGNAL": true,
