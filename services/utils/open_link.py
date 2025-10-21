@@ -35,10 +35,13 @@ async def browser_ctx(*, browser: str | None = None, delay_between_tabs: float =
 
 
 async def open_pair_links(order_info: dict) -> None:
-    urls = collect_order_urls(order_info)
-    if not urls:
-        logger.warning("Нечего открывать: ни MEXC, ни DEX URL не собраны из order_info=%r", order_info)
-        return
-    order_payload = {"mexc_url": urls.get("mexc_url", ""), "gmgn_url": urls.get("gmgn_url", "")}
-    async with browser_ctx() as eb:
-        await eb.open_order(order=order_payload, gmgn_is_needed=True)
+    try:
+        urls = collect_order_urls(order_info)
+        if not urls:
+            logger.warning("Нечего открывать: ни MEXC, ни DEX URL не собраны из order_info=%r", order_info)
+            return
+        order_payload = {"mexc_url": urls.get("mexc_url", ""), "gmgn_url": urls.get("gmgn_url", "")}
+        async with browser_ctx() as eb:
+            await eb.open_order(order=order_payload, gmgn_is_needed=True)
+    except Exception as e:
+        logger.exception(f"Ошибка при открытии ссылок для order_info={order_info}: {e}")
