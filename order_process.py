@@ -10,6 +10,7 @@ from pathlib import Path
 
 from loguru import logger
 from redis.asyncio import from_url
+from redis.client import Redis
 
 from mexc_futures_calls import (
     cancel_all_orders,
@@ -80,13 +81,13 @@ async def handle_order_create(
             logger.error("Создание ордера отменено: пустой payload для %s", order_info.get("mexc_symbol"))
             return None
         notify_beep()
+        if open_browser_on_signal:
+            asyncio.create_task(open_pair_links(order_info))
         if open_position_on_signal:
             result = await mexc_call(url_mode='create_order', data=payload, auth_token=mexc_auth)
             if result and result.get('success') and result.get('code') == 0:
                 logger.info(f"Ордер создан - {order_info.get('mexc_symbol')}, результат: {result}")
                 return result
-        if open_browser_on_signal:
-            asyncio.create_task(open_pair_links(order_info))
     except Exception as exc:
         logger.warning(f"Произошла ошибка при обработке ордера: {exc}")
     return None
@@ -157,7 +158,7 @@ async def fetch_position_id_for_symbol(auth_token: str, symbol: str, want_side_o
     return None
 
 
-async def handle_order(token, order, redis_client, settings: dict, mexc_auth: str):
+async def handle_order(token, order, redis_client: Redis, settings: dict, mexc_auth: str):
     token['order_in_process'] = True
     symbol = token['mexc_symbol']
     logger.info(f"Начало обработки ордера для {symbol}...")
@@ -275,7 +276,7 @@ async def finalize_order_and_setup_sl_tp(
     token: dict,
     settings: dict,
     mexc_auth: str,
-    redis_client
+    redis_client: Redis,
 ) -> "int | None":
     """
     Проверяет результат создания ордера, получает positionId и выставляет SL/TP (reduceOnly) план-ордера.
@@ -327,7 +328,6 @@ async def finalize_order_and_setup_sl_tp(
     if pos_id and vol and (sl_pct or tp_pct):
         price_scale = token.get('priceScale', 8)
         tasks = []
-        # правильные коды "закрыть": 4 для LONG, 2 для SHORT
         close_side = 4 if side == 1 else 2
 
         if tp_pct:
