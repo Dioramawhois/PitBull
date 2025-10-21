@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 
 import aiohttp
@@ -7,7 +8,7 @@ from loguru import logger
 import fast_api
 import local_signal_generator
 import order_process
-import position_monitor
+from settings.log_level import LogLevelEnum
 import token_services
 
 tokens_info = {}
@@ -15,7 +16,7 @@ task_status = {"running": False, "paused": False, 'restart_futures_websocket': F
 orders_queue = asyncio.Queue()
 
 logger.remove()
-logger.add(sys.stderr, level="INFO")
+logger.add(sys.stderr, level=LogLevelEnum(os.getenv("LOGLEVEl", "INFO")).value)
 
 
 async def main():
@@ -62,10 +63,9 @@ async def main():
     
     signal_task = asyncio.create_task(local_signal_generator.start_polling(orders_queue, tokens_info))
     process_task = asyncio.create_task(order_process.start_process(tokens_info, task_status, orders_queue))
-    monitor_task = asyncio.create_task(position_monitor.start_monitoring(tokens_info))
     api_task = asyncio.create_task(fast_api.serve(tokens_info, task_status))
 
-    await asyncio.gather(signal_task, process_task, monitor_task, api_task)
+    await asyncio.gather(signal_task, process_task, api_task)
 
 
 if __name__ == "__main__":

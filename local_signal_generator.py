@@ -55,16 +55,17 @@ async def _process_symbol_update(
 
     mexc_mid_price = (best_bid + best_ask) / 2.0
     spread = _calc_spread_pct(mexc_mid_price, dex_price)
+    pair_key = _norm_pair_key(symbol)
+    base = _base_from_pair(pair_key)
+    token_details = tokens_info.get(pair_key, {})
+    is_ignored = token_details.get("is_ignored", True)
     if spread is None or not (min_spread <= abs(spread) <= max_spread):
-        if spread is not None:
-            logger.info(
+        if spread is not None and not is_ignored:
+            logger.debug(
                 f"Спред для {symbol} вне диапазона: {spread:.4f}% (min={min_spread}%, max={max_spread}%)",
             )
         return
 
-    pair_key = _norm_pair_key(symbol)
-    base = _base_from_pair(pair_key)
-    token_details = tokens_info.get(pair_key, {})
     order = {
         "mexc_symbol": pair_key,
         "base_coin_name": base,
@@ -78,8 +79,11 @@ async def _process_symbol_update(
         "gmgn_url": "https://www.dextools.io/",
         "dextools_pairs": payload.get("dextools_pairs", []),
     }
-    await orders_queue.put(order)
-    logger.info(f"Сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})")
+    if not is_ignored:
+        await orders_queue.put(order)
+        logger.info(f"Сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})")
+    else:
+        logger.debug(f"Игнорируемый сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})")
 
 
 async def _handle_event(

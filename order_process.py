@@ -414,7 +414,8 @@ async def start_process(_tokens_info, _task_status, orders_queue):
             logger.error(f'Критическая ошибка в цикле start_process: {ex}', exc_info=True)
             await asyncio.sleep(1)
         finally:
-            if token: token['order_in_process'] = False
+            if token: 
+                token['order_in_process'] = False
 
             if order is not None:
                 orders_queue.task_done()
