@@ -58,11 +58,7 @@ async def _process_symbol_update(
     if spread is None or not (min_spread <= abs(spread) <= max_spread):
         if spread is not None:
             logger.info(
-                "Спред для %s (%.2f%%) вне диапазона (%.2f%% - %.2f%%). Пропускаем.",
-                symbol,
-                abs(spread),
-                min_spread,
-                max_spread,
+                f"Спред для {symbol} вне диапазона: {spread:.4f}% (min={min_spread}%, max={max_spread}%)",
             )
         return
 
@@ -100,7 +96,7 @@ async def _handle_event(
     event_name = event.get("event")
     payload = event.get("payload")
 
-    if event_name == "symbol_update":
+    if event_name == "symbol_update" and payload:
         await _process_symbol_update(payload, tokens_info, orders_queue, min_spread, max_spread)
     else:
         logger.debug("Необработанное событие %s", event_name)
