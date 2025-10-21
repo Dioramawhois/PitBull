@@ -50,7 +50,7 @@ async def _process_symbol_update(
     dex_price = payload.get("dex")
 
     if best_bid is None or best_ask is None or dex_price is None:
-        logger.debug("Пропускаю %s: нет bid/ask/dex.", symbol)
+        logger.debug(f"Пропускаю {symbol}: нет bid/ask/dex.")
         return
 
     mexc_mid_price = (best_bid + best_ask) / 2.0
@@ -87,7 +87,7 @@ async def _process_symbol_update(
 
 
 async def _handle_event(
-    event: Dict[str, Any],
+    event: dict[str, Any] | Any,
     tokens_info: Dict[str, Dict[str, Any]],
     orders_queue: "asyncio.Queue[Dict[str, Any]]",
     min_spread: float,
