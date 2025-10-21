@@ -5,7 +5,6 @@ from pathlib import Path
 
 import aiohttp
 
-# 1. Импортируем наш глобальный "регулировщик"
 from rate_limiter import limiter
 
 try:

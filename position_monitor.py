@@ -1,16 +1,12 @@
 import asyncio
+import json
 import logging
 import os
-from typing import Any
+from typing import Any, Iterable
 
 from redis.asyncio import from_url
 
-from local_signal_generator import (
-    _calc_spread_pct,
-    _iter_snapshot,
-    _norm_pair_key,
-    _read_snapshot,
-)
+from local_signal_generator import _calc_spread_pct, _norm_pair_key
 from mexc_futures_calls import get_all_market_tickers, get_open_positions, mexc_call
 
 # Импортируем функции для создания ордеров из order_process
@@ -20,6 +16,48 @@ from token_services import read_file_async
 
 logger = logging.getLogger(__name__)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+
+def _iter_snapshot(snapshot: Any) -> Iterable[tuple[str, dict]]:
+    if isinstance(snapshot, dict):
+        for symbol, data in snapshot.items():
+            if isinstance(data, dict):
+                yield symbol, data
+
+
+async def _read_snapshot(session, url: str) -> Any:
+    async with session.get(url, headers={"Accept": "application/json"}) as resp:
+        status = resp.status
+        ctype = resp.headers.get("Content-Type", "")
+        if status != 200:
+            text = await resp.text()
+            logger.warning(
+                "Снапшот %s -> HTTP %s (%s). Тело (первые 500): %r",
+                url,
+                status,
+                ctype,
+                text[:500],
+            )
+            return None
+        try:
+            return await resp.json()
+        except Exception:
+            text = await resp.text()
+            s = text.lstrip("\ufeff").strip()
+            start = min([i for i in [s.find("{"), s.find("[")] if i != -1] or [-1])
+            if start > 0:
+                s = s[start:]
+            try:
+                return json.loads(s)
+            except Exception as e2:
+                logger.error(
+                    "Не удалось распарсить снапшот как JSON. Content-Type=%s. Ошибка: %s. "
+                    "Первые 500 симв.: %r",
+                    ctype,
+                    e2,
+                    text[:500],
+                )
+                return None
 
 class SpreadTracker:
     def __init__(

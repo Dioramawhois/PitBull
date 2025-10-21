@@ -17,6 +17,7 @@ from mexc_futures_calls import (
     change_leverage,
     create_plan_order,
     get_open_positions,
+    get_market_ticker,
     get_order_by_id,
     mexc_call,
 )
