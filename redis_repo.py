@@ -59,7 +59,9 @@ class TokensRepo:
         key = f"token:{symbol}"
         # Преобразуем все значения в строки для Redis, обрабатывая None и bool
         payload = {
-            k: "" if v is None else ("1" if v is True else "0" if v is False else str(v))
+            k: ""
+            if v is None
+            else ("1" if v is True else "0" if v is False else str(v))
             for k, v in token.items()
         }
 
@@ -78,7 +80,9 @@ class TokensRepo:
 
                 key = f"token:{symbol}"
                 payload = {
-                    k: "" if v is None else ("1" if v is True else "0" if v is False else str(v))
+                    k: ""
+                    if v is None
+                    else ("1" if v is True else "0" if v is False else str(v))
                     for k, v in token.items()
                 }
                 pipe.hset(key, mapping=payload)

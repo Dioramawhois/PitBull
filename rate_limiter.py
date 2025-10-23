@@ -18,7 +18,9 @@ class APIRateLimiter:
         self.interval = 1.0 / requests_per_second
         self.timestamps = deque()
         self._lock = asyncio.Lock()
-        print(f"Rate Limiter инициализирован: не более {requests_per_second} запросов/сек.")
+        print(
+            f"Rate Limiter инициализирован: не более {requests_per_second} запросов/сек."
+        )
 
     async def acquire(self):
         """

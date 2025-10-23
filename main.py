@@ -3,16 +3,20 @@ import os
 import sys
 
 import aiohttp
+from dotenv import load_dotenv
 from loguru import logger
 
 import fast_api
 import local_signal_generator
 import order_process
-from settings.log_level import LogLevelEnum
+from routers.broker import stream_app
 import token_services
+from settings.log_level import LogLevelEnum
+
+load_dotenv()
 
 tokens_info = {}
-task_status = {"running": False, "paused": False, 'restart_futures_websocket': False}
+task_status = {"running": False, "paused": False, "restart_futures_websocket": False}
 orders_queue = asyncio.Queue()
 
 logger.remove()
@@ -24,48 +28,69 @@ async def main():
     print("Загрузка актуальной информации о контрактах с MEXC...")
     contracts_data = await token_services.get_all_mexc_contracts_info()
     if not contracts_data:
-        logger.error("Не удалось загрузить данные о контрактах с MEXC. Проверьте интернет-соединение.")
+        logger.error(
+            "Не удалось загрузить данные о контрактах с MEXC. Проверьте интернет-соединение."
+        )
         raise SystemExit("Завершение работы из-за ошибки загрузки данных.")
     else:
         logger.info(f"С MEXC загружена информация о {len(contracts_data)} контрактах.")
-    tokens_info = await token_services.read_file_async('tokens_info_dict.json') or {}
+    tokens_info = await token_services.read_file_async("tokens_info_dict.json") or {}
     logger.info(f"Загружено {len(tokens_info)} токенов из локального файла.")
     for symbol, contract_details in contracts_data.items():
         if symbol in tokens_info:
-            tokens_info[symbol]['priceScale'] = contract_details.get('priceScale', 8)
-            tokens_info[symbol]['volScale'] = contract_details.get('volScale', 0)
-            tokens_info[symbol]['contractSize'] = contract_details.get('contractSize', 1.0)
-            tokens_info[symbol]['maxLeverage'] = contract_details.get('maxLeverage', 20)
+            tokens_info[symbol]["priceScale"] = contract_details.get("priceScale", 8)
+            tokens_info[symbol]["volScale"] = contract_details.get("volScale", 0)
+            tokens_info[symbol]["contractSize"] = contract_details.get(
+                "contractSize", 1.0
+            )
+            tokens_info[symbol]["maxLeverage"] = contract_details.get("maxLeverage", 20)
         else:
             tokens_info[symbol] = {
-                'mexc_symbol': symbol,
-                'base_coin_name': contract_details.get('baseCoin', symbol.replace('_USDT', '')),
-                'priceScale': contract_details.get('priceScale', 8),
-                'volScale': contract_details.get('volScale', 0),
-                'contractSize': contract_details.get('contractSize', 1.0),
-                'maxLeverage': contract_details.get('maxLeverage', 20),  # <-- И ЭТУ
-                'is_ignored': True,
-                'is_normik': False,
-                'custom_percent': None,
-                'max_margin': None
+                "mexc_symbol": symbol,
+                "base_coin_name": contract_details.get(
+                    "baseCoin", symbol.replace("_USDT", "")
+                ),
+                "priceScale": contract_details.get("priceScale", 8),
+                "volScale": contract_details.get("volScale", 0),
+                "contractSize": contract_details.get("contractSize", 1.0),
+                "maxLeverage": contract_details.get("maxLeverage", 20),  # <-- И ЭТУ
+                "is_ignored": True,
+                "is_normik": False,
+                "custom_percent": None,
+                "max_margin": None,
             }
 
-    await token_services.save_file_async('tokens_info_dict.json', token_services.strict_token_field(tokens_info))
-    logger.info(f"Информация о токенах обновлена и сохранена. Всего токенов: {len(tokens_info)}")
+    await token_services.save_file_async(
+        "tokens_info_dict.json", token_services.strict_token_field(tokens_info)
+    )
+    logger.info(
+        f"Информация о токенах обновлена и сохранена. Всего токенов: {len(tokens_info)}"
+    )
 
     try:
-        logger.info("Попытка обновить список токенов с удаленного сервера (может не работать локально)...")
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-            async with session.get('http://193.124.114.27:3000/all_tokens_info'):
+        logger.info(
+            "Попытка обновить список токенов с удаленного сервера (может не работать локально)..."
+        )
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=5)
+        ) as session:
+            async with session.get("http://193.124.114.27:3000/all_tokens_info"):
                 pass
     except Exception as e:
-        logger.warning(f"Не удалось обновить токены с удаленного сервера (это нормально для локального режима): {e}")
-    
-    signal_task = asyncio.create_task(local_signal_generator.start_polling(orders_queue, tokens_info))
-    process_task = asyncio.create_task(order_process.start_process(tokens_info, task_status, orders_queue))
+        logger.warning(
+            f"Не удалось обновить токены с удаленного сервера (это нормально для локального режима): {e}"
+        )
+
+    signal_task = asyncio.create_task(
+        local_signal_generator.start_polling(orders_queue, tokens_info)
+    )
+    process_task = asyncio.create_task(
+        order_process.start_process(tokens_info, task_status, orders_queue)
+    )
+    faststream_task = asyncio.create_task(stream_app.run())
     api_task = asyncio.create_task(fast_api.serve(tokens_info, task_status))
 
-    await asyncio.gather(signal_task, process_task, api_task)
+    await asyncio.gather(signal_task, process_task, api_task, faststream_task)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 {
   "IS_HEDGE_MODE": false,
-  "leverage": 5,
+  "leverage": 20,
   "max_margin": 6,
 
   "EXCHANGE_STOP_LOSS_PERCENT": 10,
@@ -11,6 +11,6 @@
   "ENTRY_ORDER_TYPE": "market",
 
   "OPEN_BROWSER_ON_SIGNAL": true,
-  "OPEN_POSITION_ON_SIGNAL": true,
+  "OPEN_POSITION_ON_SIGNAL": false,
   "CLOSE_POSITION": false
 }

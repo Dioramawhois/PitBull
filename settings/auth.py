@@ -1,3 +1,3 @@
 mexc_tokens = {
-    "WEBb2ad732ea586936c03207a24d4951dcc2faed3dcfa0f127ea26a9ad8ca385067",
+    "WEB5144de2934ae2211c50d94cc8550d9d8f47a375e1aad6b56bbd64ca7cbca2759",
 }

@@ -7,7 +7,9 @@ import aiohttp
 from aiohttp import WSMsgType
 from loguru import logger
 
-DATA_PROVIDER_WS_URL = os.getenv("DATA_PROVIDER_WS_URL", "ws://127.0.0.1:8001/ws/tokens")
+DATA_PROVIDER_WS_URL = os.getenv(
+    "DATA_PROVIDER_WS_URL", "ws://127.0.0.1:8001/ws/tokens"
+)
 
 
 def _norm_pair_key(k: str) -> str:
@@ -23,7 +25,9 @@ def _spot_url(pair_key: str) -> str:
     return f"https://www.mexc.com/ru-RU/exchange/{pair_key}"
 
 
-def _calc_spread_pct(mexc_mid: Optional[float], dex: Optional[float]) -> Optional[float]:
+def _calc_spread_pct(
+    mexc_mid: Optional[float], dex: Optional[float]
+) -> Optional[float]:
     # Функция расчета спреда остается, но теперь принимает mexc_mid
     if mexc_mid is None or dex is None:
         return None
@@ -42,7 +46,7 @@ async def _process_symbol_update(
 ) -> None:
     symbol = (payload or {}).get("symbol")
     if not symbol:
-        logger.debug("Пропускаю сообщение без символа: %s", payload)
+        logger.debug(f"Пропускаю сообщение без символа: {payload}")
         return
 
     best_bid = payload.get("mexc_best_bid")
@@ -81,9 +85,13 @@ async def _process_symbol_update(
     }
     if not is_ignored:
         await orders_queue.put(order)
-        logger.info(f"Сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})")
+        logger.info(
+            f"Сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})"
+        )
     else:
-        logger.debug(f"Игнорируемый сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})")
+        logger.debug(
+            f"Игнорируемый сигнал {pair_key}: спред {spread} (MEXC_mid={mexc_mid_price}, DEX={dex_price})"
+        )
 
 
 async def _handle_event(
@@ -94,18 +102,18 @@ async def _handle_event(
     max_spread: float,
 ) -> None:
     if not isinstance(event, dict):
-        logger.debug("Получено сообщение неожиданного формата: %r", event)
+        logger.debug(f"Получено сообщение неожиданного формата: {event}")
         return
 
     event_name = event.get("event")
     payload = event.get("payload")
 
     if event_name == "symbol_update" and payload:
-        await _process_symbol_update(payload, tokens_info, orders_queue, min_spread, max_spread)
+        await _process_symbol_update(
+            payload, tokens_info, orders_queue, min_spread, max_spread
+        )
     else:
-        logger.debug("Необработанное событие %s", event_name)
-
-
+        logger.debug(f"Необработанное событие {event_name}")
 
 
 async def start_polling(
@@ -126,7 +134,7 @@ async def start_polling(
                     heartbeat=30.0,
                     receive_timeout=60.0,
                 ) as ws:
-                    logger.info("Подключились к WebSocket %s", DATA_PROVIDER_WS_URL)
+                    logger.info(f"Подключились к WebSocket {DATA_PROVIDER_WS_URL}")
                     backoff = 0.5
 
                     async for msg in ws:
@@ -134,31 +142,39 @@ async def start_polling(
                             try:
                                 data = json.loads(msg.data)
                             except json.JSONDecodeError:
-                                logger.warning("Не удалось распарсить сообщение: %r", msg.data)
+                                logger.warning(
+                                    f"Не удалось распарсить сообщение: {msg.data}"
+                                )
                                 continue
                         elif msg.type == WSMsgType.BINARY:
                             try:
                                 data = json.loads(msg.data.decode("utf-8"))
                             except (UnicodeDecodeError, json.JSONDecodeError):
-                                logger.warning("Не удалось распарсить бинарное сообщение.")
+                                logger.warning(
+                                    "Не удалось распарсить бинарное сообщение."
+                                )
                                 continue
                         elif msg.type in (WSMsgType.CLOSED, WSMsgType.CLOSE):
-                            logger.warning("WebSocket закрыт (%s).", ws.close_code)
+                            logger.warning(f"WebSocket закрыт ({ws.close_code}).")
                             break
                         elif msg.type == WSMsgType.ERROR:
-                            logger.error("Ошибка WebSocket: %s", ws.exception())
+                            logger.error(f"Ошибка WebSocket: {ws.exception()}")
                             break
                         else:
                             continue
 
                         min_spread = float(os.getenv("SPREAD_MIN_PERCENT", "1.2"))
                         max_spread = float(os.getenv("SPREAD_MAX_PERCENT", "90.0"))
-                        await _handle_event(data, tokens_info, orders_queue, min_spread, max_spread)
+                        await _handle_event(
+                            data, tokens_info, orders_queue, min_spread, max_spread
+                        )
 
         except aiohttp.ClientConnectorError:
             logger.error(f"Нет соединения с {DATA_PROVIDER_WS_URL}. Проверь порт/хост.")
         except Exception as e:
-            logger.exception(f"Ошибка в локальном генераторе сигналов: {e}", exc_info=True)
+            logger.exception(
+                f"Ошибка в локальном генераторе сигналов: {e}", exc_info=True
+            )
 
         await asyncio.sleep(backoff)
         backoff = min(max_backoff, backoff * 2)

@@ -22,7 +22,9 @@ def _is_url(value: Optional[str]) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
-def _open_urls_worker(urls: list[str], browser_name: Optional[str], delay: float) -> None:
+def _open_urls_worker(
+    urls: list[str], browser_name: Optional[str], delay: float
+) -> None:
     try:
         controller = webbrowser.get(browser_name) if browser_name else webbrowser.get()
     except webbrowser.Error:
@@ -45,7 +47,9 @@ class EngineBrowser:
     Первый адрес открывается как новая вкладка/окно, остальные — как вкладки.
     """
 
-    def __init__(self, *, browser: Optional[str] = None, delay_between_tabs: float = 0.2) -> None:
+    def __init__(
+        self, *, browser: Optional[str] = None, delay_between_tabs: float = 0.2
+    ) -> None:
         self.browser = browser
         self.delay_between_tabs = delay_between_tabs
 
@@ -55,7 +59,9 @@ class EngineBrowser:
     async def __aexit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
         await self.close()
 
-    async def open_order(self, order: Order | dict, *, gmgn_is_needed: bool = True) -> None:
+    async def open_order(
+        self, order: Order | dict, *, gmgn_is_needed: bool = True
+    ) -> None:
         urls = self._collect_urls(order, gmgn_is_needed=gmgn_is_needed)
         if not urls:
             raise ValueError("В order нет валидных URL. Нужны mexc_url и/или gmgn_url.")
@@ -100,5 +106,7 @@ async def open_links(
     browser: Optional[str] = None,
     delay_between_tabs: float = 0.2,
 ) -> None:
-    async with EngineBrowser(browser=browser, delay_between_tabs=delay_between_tabs) as eb:
+    async with EngineBrowser(
+        browser=browser, delay_between_tabs=delay_between_tabs
+    ) as eb:
         await eb.open_urls(urls)
